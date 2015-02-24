@@ -11,7 +11,7 @@ For an in-depth look at how this app was built check out this article:
 #Demo
 A working example of this app can be found on our gh-pages branch:
 
-<http://apigee.github.com/usergrid-sample-html5-messagee>
+<https://rodsimpson.github.io/messagee/index.html>
 
 #Running the app
 To get started, download the code to your machine, unzip the file, and extract the files inside. Then, open this file in a text editor:
