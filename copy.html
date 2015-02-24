@@ -1,0 +1,273 @@
+<p>Twitter seems like a very simple app on the surface. 140 characters, users following users - building an app like that should be easy, right? &nbsp;It is until you start to look under the hood. &nbsp;A quick examination reveals that there are a number of fairly complex features that need to be implemented on the backend: user management, activity streams, support for connections (users following users), and all of this packaged up in a nice, easy-to-use API.</p><p>In this article, we look at how we used Apigee App Services to quickly build out our Twitter clone called Messagee using JavaScript, HTML5, and our <a href="https://github.com/apigee/usergrid-javascript-sdk">JavaScript SDK</a>. The source code and working demo are available on <a href="https://github.com/apigee/usergrid-sample-html5-messagee">Github</a>: <a href="https://github.com/apigee/usergrid-sample-html5-messagee/archive/master.zip"> <strong>Source Code |</strong></a><strong><a href="http://apigee.github.com/usergrid-sample-html5-messagee"> Working Demo </a></strong></p><h3><strong>Messagee</strong>[[{"type":"media","view_mode":"media_original","fid":"900","attributes":{"alt":"","class":"media-image","height":"300","style":"width: 250px; height: 188px; float: right;","typeof":"foaf:Image","width":"400"}}]]</h3><p>The basic functionality of our app is, as with Twitter, users can post 140 character messages, or &ldquo;tweets&rdquo; to the system.&nbsp; Users can also become &ldquo;followers&rdquo; of other users.&nbsp; When users log in to check their messages, they can see either a general feed of all messages posted to the system or a personalized message &ldquo;feed&rdquo;. This personalized feed consists of messages the user has posted as well as messages from users they follow.</p><address style="text-align: right;"><sup>Image: <a href="http://FreeDigitalPhotos.net">FreeDigitalPhotos.net</a></sup></address><h3><strong>Getting Started</strong></h3><p>The starting point for building HTML5 based apps with the App Services API is the JavaScript SDK.&nbsp; <a href="https://github.com/apigee/usergrid-javascript-sdk">Download</a> it, then include the file at the top of your code:</p>
+<pre>
+&lt;script src=&quot;js/usergrid.js&quot; type=&quot;text/javascript&quot; /&gt;</pre>
+<p>Next, create a new <span style="font-family:courier new,courier,monospace;">client</span> to use to make your calls.  Make sure you specify your <strong>Organization</strong> and <strong>Application</strong> names. (Create these in the <a href="http://apigee.com/usergrid">App Services Admin Portal</a>.)</p>
+<pre>
+  var client = new Usergrid.Client({
+    orgName:'ApigeeOrg', //your orgname goes here (not case sensitive)
+    appName:'MessageeApp', //your appname goes here (not case sensitive)
+    logging: true, //optional - turn on logging, off by default
+    buildCurl: true //optional - turn on curl commands, off by default
+  });
+</pre>
+<p>The JavaScript SDK makes it easy to work with the API by providing the infrastructure that makes the calls to the server, including encoding and decoding any JSON.</p><h3><strong>User Management</strong></h3><p>App builders often start by thinking about user management. In the case of our Twitter clone, every user will need their own account. The most basic need is to track usernames and passwords so that users can log into their accounts.&nbsp; But we also need to track other user information such as their picture, email, and the users they are following.</p><p>This functionality is all built into App Services, so the only work we need to do in our app is to build the forms to support these features - a new user creation form, a form to update a user&rsquo;s account settings, and a login form.&nbsp; In each case, instead of submitting the form back to the server, we simply attach the submit button to a click event handler.&nbsp; That handler calls the appropriate function to grab the form data and take the appropriate action.</p><h3><strong>New user creation form</strong></h3><p>The new user creation form, located in the index.html file, simply asks for standard user information.&nbsp; We use a similar form/function to handle updating a user&rsquo;s account settings.</p>
+<pre>
+&lt;form name=&quot;form-create-new-account&quot; id=&quot;form-create-new-account&quot;&gt;
+&lt;label for=&quot;new-name&quot;&gt;Name&lt;/label&gt;
+&lt;input type=&quot;text&quot; name=&quot;new-name&quot; id=&quot;new-name&quot; class=&quot;span4&quot; /&gt;
+&lt;label for=&quot;new-email&quot;&gt;Email&lt;/label&gt;
+&lt;input type=&quot;text&quot; name=&quot;new-email&quot; id=&quot;new-email&quot; class=&quot;span4&quot; /&gt;
+&lt;label for=&quot;new-username&quot;&gt;Username&lt;/label&gt;
+&lt;input type=&quot;text&quot; name=&quot;new-username&quot; id=&quot;new-username&quot; class=&quot;span4&quot; /&gt;
+&lt;label for=&quot;new-password&quot;&gt;Password&lt;/label&gt;
+&lt;input type=&quot;password&quot; name=&quot;new-password&quot; id=&quot;new-password&quot; class=&quot;span4&quot; /&gt;
+&lt;/form&gt;
+&lt;div style=&quot;width: 50%; float: left&quot;&gt;
+&lt;button id=&quot;btn-create-new-account&quot;&gt;Go!&lt;/button&gt;
+&lt;/div&gt;</pre>
+<p>When the user clicks the submit button (btn-create-new-account), the click event is caught by the following handler:</p>
+<pre>  $('#btn-create-new-account').bind('click', createNewUser);</pre>
+<p>The click event handler then calls the createNewUser function, which, after validating the form input, creates a new Entity object of type user and saves it back to the API.&nbsp; If the call to save the user is successful, the login form is populated with the username and password, and the user is automatically logged in.&nbsp; On failure, the user is returned to the main login screen and shown an error.<span id="cke_bm_365E" style="display: none;">&nbsp;</span><span id="cke_bm_364E" style="display: none;">&nbsp;</span></p>
+<pre>
+  var options = {
+    type:'users',
+    username:username,
+    password:password,
+    name:name,
+    email:email
+  }
+
+  client.createEntity(options, function (err, newUser) {
+    if (err){
+       window.location = "#login";
+      $('#login-section-error').html('There was an error creating the new user.');
+    } else {
+      appUser = newUser;
+      //new user is created, so set their values in the login form and call login
+      $("#username").val(username);
+      $("#password").val(password);
+      login();
+    }
+  });
+</pre>
+<h3><strong>Login form</strong></h3><p>The login form takes only a username and password as form parameters. &nbsp;</p>
+<pre>
+&lt;form name=&quot;form-login&quot; id=&quot;form-login&quot;&gt;
+&lt;label for=&quot;username&quot;&gt;Username&lt;/label&gt;
+&lt;input type=&quot;text&quot; name=&quot;username&quot; id=&quot;username&quot; class=&quot;span4&quot; /&gt;
+&lt;label for=&quot;password&quot;&gt;Password&lt;/label&gt;
+&lt;input type=&quot;password&quot; name=&quot;password&quot; id=&quot;password&quot; class=&quot;span4&quot; /&gt;
+&lt;/form&gt;
+&lt;div style=&quot;width: 50%; float: left&quot;&gt;
+&lt;a href=&quot;#login&quot; id=&quot;btn-login&quot; data-role=&quot;button&quot;&gt;Login&lt;/a&gt;
+&lt;/div&gt;</pre>
+<p>Again, the submit button (btn-login) click event is caught by an event handler which in turn calls the login() function.</p>
+<pre>
+  $('#btn-login').bind('click', login);
+</pre>
+<p>The <span style="font-family:courier new,courier,monospace;">login</span> function merely grabs the username and password from the form and attempts to log the user in by calling the<span style="font-family:courier new,courier,monospace;"> client.logIn</span> function from the SDK. If the call is successful and the user is logged in, they are taken to the main page of the app: the messages list page.</p>
+<pre>
+  $('#login-section-error').html('');
+  var username = $("#username").val();
+  var password = $("#password").val();
+
+  client.login(username, password,
+    function (err) {
+      if (err) {
+        $('#login-section-error').html('There was an error logging you in.');
+      } else {
+        //login succeeded
+        client.getLoggedInUser(function(err, data, user) {
+          if(err) {
+            //error - could not get logged in user
+          } else {
+            if (client.isLoggedIn()){
+              appUser = user;
+             // showFullFeed();
+            }
+          }
+        });
+
+        //clear out the login form so it is empty if the user chooses to log out
+        $("#username").val('');
+        $("#password").val('');
+
+        //default to the full feed view (all messages in the system)
+        showMyFeed();
+      }
+    }
+  );
+</pre>
+<p>Apigee App Services makes it easy to manage users since all the necessary back-end infrastructure is already built and ready to go.</p><hr /><h3><strong>Activity Streams</strong></h3><p>Activity Streams can be used to turn individual tweets into a proper user feed, bridging the gap between a simple message and an interactive social messaging application. Here we turn our attention towards the the most important feature of twitter - the messages.&nbsp; Or more specifically, the message feeds.&nbsp; A feed, also called an activity stream, is a time-based stream of messages that consists of all the messages posted by a user, as well as any messages posted by users they follow. Users want to see the content that matters to them and feeds are just that - personalized and relevant.</p><p>App Services makes it easy to use activity streams in your application. You need not worry about the complex back-end code as it is easily leveraged with simple API calls, enabling you to focus solely on the front end application.</p><h3><strong>Creating new activities</strong></h3><p>The foundation of activity streams is the activities collection. We use these activities as the containers for messages that are generated in our Messagee app. When a user posts a new message (or tweet), we simply add that message to an activity object and send it to the API.&nbsp; To start, we need a simple form where the user will enter their message:</p>
+<pre>
+&lt;form name=&quot;login&quot; id=&quot;login-form&quot;&gt;
+&lt;label for=&quot;content&quot;&gt;Message (150 Chars max)&lt;/label&gt;
+&lt;textarea id=&quot;content&quot; class=&quot;input-xlarge&quot; rows=&quot;3&quot; style=&quot;margin: 0px; width: 100%; height: 125px; &quot;&gt;&lt;/textarea&gt;
+&lt;/form&gt;
+&lt;div style=&quot;width: 50%; float: left&quot;&gt;
+&lt;button id=&quot;post-message&quot;&gt;Post&lt;/button&gt;
+&lt;/div&gt;</pre>
+<p>Like the previous forms, clicks on the submit button (post-message) are picked up by an event handler:</p>
+<pre>
+  $('#post-message').bind('click', postMessage);
+</pre>
+<p>The event handler calls the <span style="font-family:courier new,courier,monospace;">postMessage</span> function which actually submits the activity to the API. First, the function gets a reference to the currently logged in user.&nbsp; Then, using that user&rsquo;s data, and the message that they are trying to post, an &ldquo;actor&rdquo; object is built and then saved to the API.&nbsp; Upon success, the feed window is displayed:</p>
+<pre>
+  var options =
+  {"actor" : {
+    "displayName" : appUser.get('username'),
+    "uuid" : appUser.get('uuid'),
+    "username" : appUser.get('username'),
+    "image" : {
+      "duration" : 0,
+      "height" : 80,
+      "url" : "http://www.gravatar.com/avatar/",
+      "width" : 80
+    },
+    "email" : appUser.get('email'),
+    "picture": "fred"
+  },
+  "verb" : "post",
+  "content" : $("#content").val(),
+  "lat" : 48.856614,
+  "lon" : 2.352222};
+
+  client.createUserActivity('me', options, function(err, activity) { //first argument can be 'me', a uuid, or a username
+    if (err) {
+      alert('could not post message');
+    } else {
+       if (fullFeedView) {
+        //reset the feed object so when we view it again, we will get the latest feed
+        fullActivityFeed.resetPaging();
+        showFullFeed();
+      } else {
+        //reset the feed object so when we view it again, we will get the latest feed
+        userFeed.resetPaging();
+        showMyFeed();
+      }
+      window.location = "#page-messages-list";
+    }
+  });
+</pre>
+<p>Note that we are not doing a POST operation directly to the activities collection.&nbsp; We are posting to the activity to <span style="font-family:courier new,courier,monospace;">/users/me/activities</span>.&nbsp; This means that, along with creating the activity and adding it to the activities collection, we are&nbsp; establishing a relationship between the user and the activity they are creating.&nbsp; This is important because this &ldquo;ownership&rdquo; relationship is used in conjunction with &ldquo;following&rdquo; connections to determine which messages show up in a feed.</p>
+
+<h3><strong>Making connections</strong></h3>
+
+<p>The concept of following and followers, also known as a &ldquo;social graph&rdquo;, is what has made Twitter a social powerhouse.&nbsp; Users follow other users so they can see the messages those other users post. For example, say we have two users, thing1 and thing2. Now suppose that thing1 is following thing2 (more about how to establish this relationship in just a bit). This means that thing1 cares about what thing2 has to say and wants to see all the messages that thing2 creates.&nbsp; In other words, thing2&rsquo;s messages should show up in thing1&rsquo;s feed.</p><p>App Services has the facility for users to follow other users already built in.&nbsp; We take advatage of it in Messagee by adding a &ldquo;follow&rdquo; link to each user&rsquo;s posted message in the display. Clicking the link calls the <span style="font-family:courier new,courier,monospace;">followUser</span> function.  We use the /me shortcut as a reference to the currently logged in user to make the API call to create the following relationship:</p>
+<pre>
+  var options = {
+    method:'POST',
+    endpoint:'users/me/following/users/' + username
+  };
+  client.request(options, function (err, data) {
+    if (err) {
+      $('#now-following-text').html('Aw Shucks!  There was a problem trying to follow <strong>' + username + '</strong>');
+    } else {
+      $('#now-following-text').html('Congratulations! You are now following <strong>' + username + '</strong>');
+      showMyFeed();
+    }
+  });
+</pre>
+<p>Upon a successful call to the API, a new &ldquo;following&rdquo; relationship between the current user and the user who posted the message. The API keeps track of all of these &ldquo;following&rdquo; relationships internally and automatically. Once the connection is made, the user&rsquo;s &ldquo;feed&rdquo; can be queried to get the message stream. As we shall see, a user&rsquo;s feed is made up of their messages as well as the messages of all the users they follow.</p><p>App Service Activity Streams can be used to model the message feeds found in Twitter.&nbsp; Posting an Activity not only makes a new activity but also creates a connection between the activity and the user who posted it.&nbsp; We also learned how to leverage the API to build a &ldquo;social graph&rdquo;, by creating a &ldquo;following&rdquo; relationship between one user and another.&nbsp;</p><hr /><p>In this final segment, we see how to put the concepts together to create a customized feed that shows a user only the relevant data they care about, as well as how to get a list of all the activities in the application.</p><h3><strong>Full activities feed</strong></h3><p>After logging in, the main display in the Messagee app is an unfiltered activity stream that shows all the activities (messages) posted to the application. The view is shown by default, but can also be activated by clicking the &ldquo;All Posts&rdquo; button:</p>
+<pre>
+&lt;a href=&quot;#&quot; data-role=&quot;button&quot; data-icon=&quot;grid&quot; id=&quot;btn-show-full-feed&quot; class=&quot;ui-btn-up-c&quot;&gt;All Posts&lt;/a&gt;</pre>
+<p>Clicking the button calls the showFullFeed function, which calls the get method of the fullActivityFeed Collection object:</p>
+<pre>
+  //make sure we are on the messages page
+  window.location = "#page-messages-list";
+
+  fullFeedView = true;
+  $('#btn-show-full-feed').addClass('ui-btn-up-c');
+  $('#btn-show-my-feed').removeClass('ui-btn-up-c');
+
+
+  if  (fullActivityFeed) {
+    fullActivityFeed.resetPaging();
+    fullActivityFeed.fetch(function (err) {
+      if (err) {
+        alert('Could not get activity feed. Please try again.');
+      } else {
+        drawMessages(fullActivityFeed);
+      }
+    });
+  } else {
+    var options = {
+      type:'activities',
+      qs:{"ql":"order by created desc"}
+    }
+    //no feed obj yet, so make a new one
+    client.createCollection(options, function(err, collectionObj){
+      if (err) {
+        alert('Could not get activity feed. Please try again.');
+      } else {
+        fullActivityFeed = collectionObj;
+        drawMessages(fullActivityFeed);
+      }
+    });
+  }
+</pre>
+<p>Upon success, it calls the <span style="font-family:courier new,courier,monospace;">drawMessages</span> function which loops through all the returned results:</p>
+<pre>
+feed.resetEntityPointer();
+   while(feed.hasNextEntity()) {
+     var message = feed.getNextEntity();
+     &hellip;</pre>
+<p>Once the messages are drawn to the screen, the <span style="font-family:courier new,courier,monospace;">success</span> function also checks to see if there is a previous or next page of results:</p>
+<pre>
+fullActivityFeed.hasPreviousPage()
+
+fullActivityFeed.hasNextPage()</pre>
+<p>If there are, then the appropriate buttons are displayed.</p><h3><strong>Customized feeds</strong></h3><p>The full view of all the Activities in the system is certainly useful, but what makes the app really interesting (and why Twitter is so successful) is that it also has the facility to show personalized feeds. When a user&rsquo;s feed is queried, the API dynamically builds the feed based on any relevant relationships and returns the stream of messages.</p><p>To display the user&rsquo;s feed, we have created a button:</p>
+<pre>
+&lt;a href=&quot;#&quot; data-role=&quot;button&quot; data-icon=&quot;home&quot; id=&quot;btn-show-my-feed&quot;&gt;My Stream&lt;/a&gt;</pre>
+<p>And attached it to a click event that calls the showMyFeed function:</p>
+<pre>  $('#btn-show-my-feed').bind('click', showMyFeed);</pre>
+<p>The <span style="font-family:courier new,courier,monospace;">showMyFeed</span> function retrieves a paged list of all the messages in the user&rsquo;s feed.&nbsp; Notice that when we create the userfeed object, we again use the /me alias to make it easy to reference the currently logged in user:</p>
+<pre>
+  type:'user/me/feed'
+</pre>
+<p>Now, in the function, we can simply call <span style="font-family:courier new,courier,monospace;">fetch</span>. The <span style="font-family:courier new,courier,monospace;">fetch</span> method retrieves the list of messages from the server: &nbsp;</p>
+<pre>
+  //make sure we are on the messages page
+  window.location = "#page-messages-list";
+
+  fullFeedView = false;
+  $('#btn-show-full-feed').removeClass('ui-btn-up-c');
+  $('#btn-show-my-feed').addClass('ui-btn-up-c');
+
+  if  (userFeed) {
+    userFeed.resetPaging();
+    userFeed.fetch(function (err) {
+      if (err) {
+        alert('Could not get user feed. Please try again.');
+      } else {
+        drawMessages(userFeed);
+      }
+    });
+  } else {
+    //no feed obj yet, so make a new one
+    var options = {
+      type:'user/me/feed',
+      qs:{"ql":"order by created desc"}
+    }
+    client.createCollection(options, function(err, collectionObj){
+      if (err) {
+       alert('Could not get user feed. Please try again.');
+      } else {
+        userFeed = collectionObj;
+        drawMessages(userFeed);
+      }
+    });
+  }
+</pre>
+<p>Just like the full feed, upon a successful call, the <span style="font-family:courier new,courier,monospace;">drawMessages</span> function is called which loops through all the returned results:</p>
+<pre>
+feed.resetEntityPointer();
+   while(feed.hasNextEntity()) {
+     var message = feed.getNextEntity();
+     &hellip;</pre>
+<p>Also, just like the full feed, once the messages are drawn to the screen, the <span style="font-family:courier new,courier,monospace;">success</span> function checks to see if there is a previous or next page of results:</p>
+<pre>
+userFeed.hasPreviousPage()
+userFeed.hasNextPage()</pre>
+<p>If there are more pages of data, then the appropriate buttons are displayed.</p><hr /><p>We&#39;ve seen how to query and display the full activity stream as well as the more specialized feed for an individual user.&nbsp; By combining these features with built-in user management and social graph functionality, a wide range of opportunities for socially relevant applications emerges.</p><p>We also saw how to use the <a href="http://github.com/apigee/usergrid-javascript-sdk">JavaScript SDK</a> to get up and running quickly.</p><p>Because the App Services API follows a RESTful design model, calls to invoke the API are simple to use, and because they take and return JSON, they work nicely with JavaScript. Put it all together and you have a platform that has enabled us to build a Twitter style app in a very short development cycle.</p><p>&nbsp;</p>
