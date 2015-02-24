@@ -10,21 +10,6 @@
     <script src="js/md5.js" type="text/javascript"></script>
     <script src="js/apigee.js" type="text/javascript"></script>
     <script src="js/usergrid.validation.js" type="text/javascript"></script>
-        <script>
-            (function() {
-              var global = global||this,
-                APIGEE_ORGNAME="Your Org Name",
-                APIGEE_APPNAME="Your App Name";
-                if("undefined"===typeof APIGEE_ORGNAME || "Your Org Name" === APIGEE_ORGNAME){
-                    APIGEE_ORGNAME=prompt("What is the Organization Name you registered at http://apigee.com/usergrid ?\n(you can set this permanently on line 15)", "yourorgname");
-                }
-                if("undefined"===typeof APIGEE_APPNAME || "Your App Name" === APIGEE_APPNAME){
-                    APIGEE_APPNAME=prompt("What is the App Name you created at http://apigee.com/usergrid ?\n(you can set this permanently in on line 16)", "sandbox");
-                }
-                global.APIGEE_ORGNAME=APIGEE_ORGNAME;
-                global.APIGEE_APPNAME=APIGEE_APPNAME;
-            })();
-        </script>
     <script src="js/app.js" type="text/javascript"></script>
   </head>
   <body>

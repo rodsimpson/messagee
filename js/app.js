@@ -31,16 +31,10 @@ $(document).ready(function () {
   /*******************************************************************
   * create client and set up vars
   ********************************************************************/
-  
-    if("undefined"===typeof APIGEE_ORGNAME){
-        APIGEE_ORGNAME=prompt("What is the Organization Name you registered at http://apigee.com/usergrid ?\n(you can set this permanently in config.js)", "ORG NAME");
-    }
-    if("undefined"===typeof APIGEE_APPNAME){
-        APIGEE_APPNAME="sandbox";
-    }
+
   var client_creds = {
-    orgName:APIGEE_ORGNAME, //your orgname goes here (not case sensitive)
-    appName:APIGEE_APPNAME, //your appname goes here (not case sensitive)
+    orgName:"yourorgname", //your orgname goes here (not case sensitive)
+    appName:"messagee", //your appname goes here (not case sensitive)
     logging: true, //optional - turn on logging, off by default
     buildCurl: true //optional - turn on curl commands, off by default
   };
